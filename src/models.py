@@ -46,10 +46,24 @@ class Character(db.Model):
     #CHILDREN | COMMENTS | ONE TO MANY
     comment = db.relationship('Comment', backref='character', lazy=True)
 
+    def __repr__(self):
+        return '<Character %r>' % self.name
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "age": self.age,
+            "height": self.heigth,
+            "eye_color": self.eye_color,
+            # do not serialize the password, its a security breach
+        }
+
 class Planet(db.Model):
     __tablename__ = 'planet'
    # PK
     id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(250))
     diameter = db.Column(db.Integer)
     gravity = db.Column(db.Integer)
     population = db.Column(db.Integer)
@@ -59,10 +73,26 @@ class Planet(db.Model):
     #CHILDREN | COMMENTS | ONE TO MANY
     comment = db.relationship('Comment', backref='planet', lazy=True)
 
+    def __repr__(self):
+        return '<Planet %r>' % self.name
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "diameter": self.diameter,
+            "gravity": self.gravity,
+            "population": self.population,
+            "climate": self.climate,
+            
+            # do not serialize the password, its a security breach
+        }
+
 class Starship(db.Model):
     __tablename__ = 'starship'
    # PK 
     id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(250))
     model = db.Column(db.String(250))
     starship_class = db.Column(db.String(250))
     crew = db.Column(db.Integer)
@@ -71,6 +101,21 @@ class Starship(db.Model):
     favorites = db.relationship('Favorite', backref='starship', lazy=True)
     #CHILDREN | FAVORITE | ONE TO MANY
     comments = db.relationship('Comment', backref='starship', lazy=True)
+
+    def __repr__(self):
+        return '<Starship %r>' % self.name
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "model": self.model,
+            "starship_class": self.starship_class,
+            "crew": self.crew,
+            "passengers": self.passengers,
+            
+            # do not serialize the password, its a security breach
+        }
 
 class Favorite(db.Model):
     __tablename__ = 'favorites'
@@ -90,6 +135,19 @@ class Favorite(db.Model):
     #starship = db.relationship('starship', backref='favorites', lazy=True)
     starship_id = db.Column(db.Integer, db.ForeignKey('starship.id'))
 
+    def __repr__(self):
+        return '<Favorite %r>' % self.id
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "character_id": self.character_id,
+            "planet_id": self.planet_id,
+            "starship_id": self.starship_id,
+            
+            # do not serialize the password, its a security breach
+        }
 
 ####### SOCIAL MEDIA STRUCTURE DATABASE ######
 
@@ -113,6 +171,21 @@ class Comment(db.Model):
     # FK | STARSHIP | ONE TO MANY
     #starship = db.relationship('post', back_populates='comments' )
     starship_id = db.Column(db.Integer, db.ForeignKey('starship.id'))
+
+    def __repr__(self):
+        return '<Comment %r>' % self.id
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "comment_text": self.comment_text,
+            "user_id": self.user_id,
+            "character_id": self.character_id,
+            "planet_id": self.planet_id,
+            "starship_id": self.starship_id,
+            
+            # do not serialize the password, its a security breach
+        }
 
 # class Post(db.Model):
 #     __tablename__ = 'post'

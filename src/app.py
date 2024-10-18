@@ -3,7 +3,8 @@ This module takes care of starting the API Server, Loading the DB and Adding the
 """
 import os
 from flask import Flask, request, jsonify, url_for
-from flask_migrate import Migrate
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate, upgrade, migrate
 from flask_swagger import swagger
 from flask_cors import CORS
 from utils import APIException, generate_sitemap
@@ -13,6 +14,7 @@ from models import db, User, Favorite, Character, Planet, Starship, Comment
 
 app = Flask(__name__)
 app.url_map.strict_slashes = False
+#db = SQLAlchemy(app)
 
 db_url = os.getenv("DATABASE_URL")
 if db_url is not None:
@@ -49,6 +51,7 @@ def get_all_people():
         #return th serialized list
         return jsonify(characters_list), 200
     except Exception as error:
+        print(error)
         return jsonify({"message": "Error fetching people from database"}), 500
 
 
@@ -70,7 +73,7 @@ def get_single_person(people_id):
         return jsonify(character_data), 200
     except Exception as error:  
         print(error)
-        return jsonify({"message": "Error fetching persona from database"})
+        return jsonify({"message": "Error fetching persona from database"}), 500
 
 
 #[GET] /planets Get a list of all the planets in the database.
@@ -171,40 +174,47 @@ def get_users():
     try:
         # Realiza la consulta para obtener todas las naves estelares
         users = User.query.all()
+
+        if not users:
+            return jsonify({"message": "No users found"}), 404
         
         # Serializa los resultados de la consulta
-        users_list = [users.serialize() for user in users]
+        users_list = [user.serialize() for user in users]
 
         # Retorna la lista serializada de naves estelares
         return jsonify(users_list), 200
     except Exception as error:
         print(error)
-        return jsonify({"message": "Error fetching starships from the database"}), 500
+        return jsonify({"message": "Error fetching users from the database"}), 500
 
 #[GET] /users/favorites Get all the favorites that belong to the current user.
-@app.route("/users/favorites", methods=["GET"])
+@app.route("/users/<int:user_id>/favorites", methods=["GET"])
 def get_users_favorites(user_id):
     try:
         # Obtén el ID del usuario actual (por ejemplo, desde un token de autenticación)
-        user_id = request.args.get('user_id', type=int)  # Suponiendo que el ID del usuario se pasa como parámetro
 
+        if not user_id:
+            return jsonify({"message": "User ID is missing"}), 400
+        
         user = User.query.get(user_id)
 
-        if user in None:
+        if user is None:
             return jsonify({"message": "user has not favorites"}), 404
         
         favorites_data =[favorite.serialize() for favorite in user.favorites]
 
+        if not favorites_data:
+            return jsonify({"message": "User has no favorites"}), 404
+
         return jsonify(favorites_data), 200
+    
     except Exception as error:
         print(error)
-        return jsonify({"message": "Error fetching starship from the dstabase"})
+        return jsonify({"message": "Error fetching starship from the database"})
 
 #[POST] /favorite/planet/<int:planet_id> Add a new favorite planet to the current user with the planet id = planet_id.
-@app.route("/favorites/planet/<int:planet_id>", methods=["POST"])
-def add_favorite_planet_to_user(planet_id):
-    #Extract data from request
-    user_id= request.json.get("user_id")
+@app.route("/favorites/user/<int:user_id>/planet/<int:planet_id>", methods=["POST"])
+def add_favorite_planet_to_user(planet_id, user_id):
     #Verifying we are receiving all required data in the request
     if not user_id:
         return jsonify({"message": "User ID is required"}), 400
@@ -215,7 +225,7 @@ def add_favorite_planet_to_user(planet_id):
         return jsonify({"message": "Planet already a favorite"}), 400 
     
     #Add a new favorite
-    new_favorite = Favorite(user_id= user_id, planet_id= planet_id, is_active=True)
+    new_favorite = Favorite(user_id= user_id, planet_id= planet_id)
     try:
         db.session.add(new_favorite)
         db.session.commit()
@@ -227,21 +237,20 @@ def add_favorite_planet_to_user(planet_id):
 
 
 #[POST] /favorite/people/<int:people_id> Add new favorite people to the current user with the people id = people_id.
-@app.route("/favorites/people/<int:people_id>", methods=["POST"])
-def add_favorite_character_to_user(people_id):
-    #Extract data from request
-    user_id= request.json.get("user_id")
+@app.route("/favorites/user/<int:user_id>/people/<int:people_id>", methods=["POST"])
+def add_favorite_character_to_user(people_id, user_id):
+    
     #Verifying we are receiving all required data in the request
     if not user_id:
         return jsonify({"message": "User ID is required"}), 400
     
     #Check if the people is already a favorite
-    existing_favorite = Favorite.query.filter_by(user_id=user_id, people_id=people_id).first()
+    existing_favorite = Favorite.query.filter_by(user_id=user_id, character_id=people_id).first()
     if existing_favorite:
         return jsonify({"message": "Character already a favorite"}), 400 
     
     #Add a new favorite
-    new_favorite = Favorite(user_id= user_id, people_id= people_id, is_active=True)
+    new_favorite = Favorite(user_id= user_id, character_id= people_id)
     try:
         db.session.add(new_favorite)
         db.session.commit()
@@ -252,10 +261,8 @@ def add_favorite_character_to_user(people_id):
     return jsonify({"massage": "Character added to favorites"}), 201
 
 #[POST] /favorite/starship/<int:starship_id> Add new favorite starship to the current user with the starship id = starship_id.
-@app.route("/favorites/starship/<int:starship_id>", methods=["POST"])
-def add_favorite_starship_to_user(starship_id):
-    #Extract data from request
-    user_id= request.json.get("user_id")
+@app.route("/favorites/user/<int:user_id>/starship/<int:starship_id>", methods=["POST"])
+def add_favorite_starship_to_user(starship_id, user_id):
     #Verifying we are receiving all required data in the request
     if not user_id:
         return jsonify({"message": "User ID is required"}), 400
@@ -266,7 +273,7 @@ def add_favorite_starship_to_user(starship_id):
         return jsonify({"message": "Starship already a favorite"}), 400 
     
     #Add a new favorite
-    new_favorite = Favorite(user_id= user_id, starship_id= starship_id, is_active=True)
+    new_favorite = Favorite(user_id= user_id, starship_id= starship_id)
     try:
         db.session.add(new_favorite)
         db.session.commit()
@@ -425,9 +432,13 @@ def add_comment_in_starship(starship_id):
 ###+4 Create also endpoints to add (POST), update (PUT), and delete (DELETE) character, planet and starship. That way all the database information can be managed using the API instead of having to rely on the Flask admin to create the planets and people.
 
 
+# new_user = User(email="john.doe@example.com", password="password123", is_active=True)
+# db.session.add(new_user)
+# db.session.commit()
 
 
 # this only runs if `$ python src/app.py` is executed
 if __name__ == '__main__':
     PORT = int(os.environ.get('PORT', 3000))
     app.run(host='0.0.0.0', port=PORT, debug=False)
+
